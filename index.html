@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nagar Nigam App</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; box-sizing: border-box; border-radius: 5px; border: 1px solid #ccc; }
+        button { background: #007BFF; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0056b3; }
+        .hidden { display: none; }
+        #locationText { font-size: 14px; color: green; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <!-- 📱 Login Screen -->
+    <div id="loginScreen" class="card">
+        <h2>Nagar Nigam Login</h2>
+        <input type="text" id="phone" placeholder="Phone Number (Jaise: 1234567890)">
+        <input type="password" id="password" placeholder="Password (Jaise: king)">
+        <button onclick="loginUser()">Login</button>
+    </div>
+
+    <!-- 📱 Complaint Screen (Login hone par dikhegi) -->
+    <div id="complaintScreen" class="card hidden">
+        <h2>Nayi Complaint Darj Karein</h2>
+        
+        <label>Problem ki Category:</label>
+        <input type="text" id="category" placeholder="Jaise: Gaddha, Kachra, Pani" value="Gaddha">
+        
+        <!-- Live GPS Location -->
+        <button onclick="getLiveLocation()" style="background: #28a745;">📍 Get Live Location</button>
+        <p id="locationText">Location: Abhi set nahi hai</p>
+
+        <!-- Camera / File Upload -->
+        <label>Photo Upload Karein:</label>
+        <input type="file" id="imageFile" accept="image/*" capture="environment">
+
+        <button onclick="submitComplaint()">🚀 Submit Complaint</button>
+    </div>
+
+    <!-- ⚙️ JavaScript Logic -->
+    <script>
+        // Tumhara FastAPI Server URL
+        const BASE_URL = "http://127.0.0.1:8000/api";
+        let currentUserId = null;
+        let lat = null;
+        let lng = null;
+
+        // 1. API - Login User
+        async function loginUser() {
+            const phone = document.getElementById('phone').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${BASE_URL}/users/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number: phone, password: password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert("Login Successful! Welcome " + data.name);
+                    currentUserId = data.user_id; // ID save kar li
+                    
+                    // Login screen chupao, Complaint screen dikhao
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('complaintScreen').classList.remove('hidden');
+                } else {
+                    alert("Error: " + data.detail);
+                }
+            } catch (error) {
+                alert("Backend server se connect nahi ho paya. Kya uvicorn chalu hai?");
+            }
+        }
+
+        // 2. Phone ka GPS Sensor access karna
+        function getLiveLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        lat = position.coords.latitude;
+                        lng = position.coords.longitude;
+                        document.getElementById('locationText').innerText = `Location Saved: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+                    },
+                    (error) => {
+                        alert("Please allow Location permission!");
+                    }
+                );
+            } else {
+                alert("Aapka browser GPS support nahi karta.");
+            }
+        }
+
+        // 3. API - Submit Complaint (Photo Upload + Database Save)
+        async function submitComplaint() {
+            const category = document.getElementById('category').value;
+            const fileInput = document.getElementById('imageFile');
+
+            // 1. Basic Check: Location aur Photo hai ya nahi
+            if (!lat || !lng) {
+                alert("Pehle 'Get Live Location' button par click karke location save karein!");
+                return;
+            }
+            if (fileInput.files.length === 0) {
+                alert("Kripya problem ki ek photo select karein!");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append("file", file); // FastAPI ko 'file' keyword chahiye
+
+            try {
+                // UI Update: User ko pata chale ki process chal raha hai
+                const submitBtn = document.querySelector("button[onclick='submitComplaint()']");
+                submitBtn.innerText = "⏳ Uploading Photo...";
+                submitBtn.disabled = true;
+
+                // 2. Photo Cloudinary par upload karna
+                const uploadRes = await fetch(`${BASE_URL}/upload-image`, {
+                    method: 'POST',
+                    body: formData // File bhejte waqt Content-Type khud set hota hai
+                });
+                
+                if (!uploadRes.ok) throw new Error("Photo upload fail ho gayi. Cloudinary API check karein.");
+                
+                const uploadData = await uploadRes.json();
+                const imageUrl = uploadData.url;
+
+                // 3. Complaint ka data Database me bhejna
+                submitBtn.innerText = "⏳ Saving Complaint...";
+                const complaintData = {
+                    user_id: currentUserId,
+                    category: category,
+                    latitude: lat,
+                    longitude: lng,
+                    user_image_url: imageUrl
+                };
+
+                const complaintRes = await fetch(`${BASE_URL}/complaints`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(complaintData)
+                });
+                
+                const finalData = await complaintRes.json();
+
+                if (complaintRes.ok) {
+                    alert("✅ Success! " + finalData.message);
+                    // Form reset kar do taaki nayi complaint kar sake
+                    fileInput.value = "";
+                    submitBtn.innerText = "🚀 Submit Complaint";
+                    submitBtn.disabled = false;
+                } else {
+                    alert("Error: " + finalData.detail);
+                }
+
+            } catch (error) {
+                alert("System error: " + error.message);
+                document.querySelector("button[onclick='submitComplaint()']").innerText = "🚀 Submit Complaint";
+                document.querySelector("button[onclick='submitComplaint()']").disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker Portal</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #fff3cd; padding: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; box-sizing: border-box; border-radius: 5px; border: 1px solid #ccc; }
+        button { background: #ffc107; color: black; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #e0a800; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>👷 Worker Portal</h2>
+        <p>Kaam poora hone ke baad photo upload karein.</p>
+
+        <input type="number" id="compId" placeholder="Complaint ID (Jaise: 1)">
+        
+        <label>Solve kiye gaye kaam ki Photo:</label>
+        <input type="file" id="imageFile" accept="image/*" capture="environment">
+
+        <button onclick="completeTask()">✅ Kaam Complete Mark Karein</button>
+    </div>
+
+    <script>
+        const BASE_URL = "http://127.0.0.1:8000/api";
+
+        async function completeTask() {
+            const compId = document.getElementById('compId').value;
+            const fileInput = document.getElementById('imageFile');
+
+            if (!compId) {
+                alert("Kripya Complaint ID daalein!");
+                return;
+            }
+            if (fileInput.files.length === 0) {
+                alert("Kripya kaam poora hone ki photo click karein!");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const submitBtn = document.querySelector("button");
+            
+            try {
+                submitBtn.innerText = "⏳ Uploading Photo...";
+                submitBtn.disabled = true;
+
+                // 1. Photo ko Cloudinary par upload karna
+                const uploadRes = await fetch(`${BASE_URL}/upload-image`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!uploadRes.ok) throw new Error("Photo upload fail ho gayi.");
+                const uploadData = await uploadRes.json();
+                const imageUrl = uploadData.url;
+
+                // 2. FastAPI backend par Task Complete mark karna
+                submitBtn.innerText = "⏳ Updating Task...";
+                const completeRes = await fetch(`${BASE_URL}/employees/complaints/${compId}/complete`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ emp_image_url: imageUrl })
+                });
+
+                const finalData = await completeRes.json();
+
+                if (completeRes.ok) {
+                    alert("✅ Success: " + finalData.message);
+                    document.getElementById('compId').value = "";
+                    fileInput.value = "";
+                } else {
+                    alert("Error: " + finalData.detail);
+                }
+
+            } catch (error) {
+                alert("System error: " + error.message);
+            } finally {
+                submitBtn.innerText = "✅ Kaam Complete Mark Karein";
+                submitBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

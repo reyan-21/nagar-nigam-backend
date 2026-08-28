@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #eef2f3; padding: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #000; color: white; }
+        img { max-width: 80px; border-radius: 5px; cursor: pointer; }
+        select, input, button { padding: 10px; margin-top: 10px; width: 100%; box-sizing: border-box; border-radius: 5px; border: 1px solid #ccc; }
+        button { background: #28a745; color: white; border: none; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h2>🛠️ Admin Dashboard</h2>
+
+    <!-- Pending Complaints Table -->
+    <div class="card">
+        <h3>Pending Complaints</h3>
+        <button onclick="loadDashboard()" style="background: #007BFF; width: auto; margin-bottom: 10px;">🔄 Refresh Data</button>
+        <table id="complaintsTable">
+            <tr><th>ID</th><th>Category</th><th>Photo</th><th>Status</th></tr>
+        </table>
+    </div>
+
+    <!-- Assign Task Section -->
+    <div class="card">
+        <h3>Kaam Assign Karein</h3>
+        <input type="number" id="compId" placeholder="Complaint ID (Jaise: 1)">
+        <select id="empSelect">
+            <option value="">Employee Select Karein</option>
+        </select>
+        <button onclick="assignTask()">✅ Assign Task</button>
+    </div>
+
+    <script>
+        const BASE_URL = "http://127.0.0.1:8000/api";
+
+        async function loadDashboard() {
+            // 1. Pending Complaints Fetch
+            const compRes = await fetch(`${BASE_URL}/admin/complaints/pending`);
+            const complaints = await compRes.json();
+            
+            let compHTML = "<tr><th>ID</th><th>Category</th><th>Photo</th><th>Status</th></tr>";
+            complaints.forEach(c => {
+                compHTML += `<tr>
+                    <td>${c.complaint_id}</td>
+                    <td>${c.category}</td>
+                    <td><a href="${c.user_image_url}" target="_blank"><img src="${c.user_image_url}"></a></td>
+                    <td style="color: red; font-weight: bold;">Pending</td>
+                </tr>`;
+            });
+            document.getElementById('complaintsTable').innerHTML = compHTML;
+
+            // 2. Available Employees Fetch
+            const empRes = await fetch(`${BASE_URL}/admin/employees/available`);
+            const employees = await empRes.json();
+            
+            let empHTML = "<option value=''>Employee Select Karein</option>";
+            employees.forEach(e => {
+                empHTML += `<option value="${e.emp_id}">${e.name} (ID: ${e.emp_id})</option>`;
+            });
+            document.getElementById('empSelect').innerHTML = empHTML;
+        }
+
+        async function assignTask() {
+            const compId = document.getElementById('compId').value;
+            const empId = document.getElementById('empSelect').value;
+
+            if (!compId || !empId) {
+                alert("Kripya Complaint ID aur Employee dono select karein!");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/admin/complaints/${compId}/assign`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ emp_id: parseInt(empId) })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    alert("✅ Success: " + data.message);
+                    document.getElementById('compId').value = ""; 
+                    loadDashboard(); // Table khud update ho jayegi
+                } else {
+                    alert("Error: " + data.detail);
+                }
+            } catch (error) {
+                alert("System error: " + error.message);
+            }
+        }
+
+        // Page load hote hi API call hogi
+        window.onload = loadDashboard;
+    </script>
+</body>
+</html>
