@@ -64,25 +64,31 @@ cloudinary.config(
 
 # --- 🚀 APIs SHURU HOTE HAIN ---
 
-# Signup API
+# Signup API (Fix applied here)
 @app.post("/api/signup")
 def signup(account: AccountCreate, db: Session = Depends(get_db)):
     existing = db.query(Account).filter(Account.email == account.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Ye Email pehle se registered hai!")
     
-    hashed_pw = pwd_context.hash(account.password)
+    # 72 character limit fix
+    safe_password = account.password[:72]
+    hashed_pw = pwd_context.hash(safe_password)
+    
     new_acc = Account(email=account.email, password_hash=hashed_pw, role=account.role)
     db.add(new_acc)
     db.commit()
     return {"message": f"{account.role} account successfully ban gaya!"}
 
-# Strict Role-Based Login API
+# Strict Role-Based Login API (Fix applied here)
 @app.post("/api/login/{portal_role}")
 def login(portal_role: str, req: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(Account).filter(Account.email == req.email).first()
     
-    if not user or not pwd_context.verify(req.password, user.password_hash):
+    # 72 character limit fix
+    safe_password = req.password[:72]
+    
+    if not user or not pwd_context.verify(safe_password, user.password_hash):
         raise HTTPException(status_code=401, detail="Email ya Password galat hai!")
     
     if user.role != portal_role:
