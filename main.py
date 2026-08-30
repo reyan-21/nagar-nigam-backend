@@ -6,6 +6,78 @@ import cloudinary
 import cloudinary.uploader
 from fastapi.middleware.cors import CORSMiddleware # Ye nayi line hai
 
+from pydantic import BaseModel
+from passlib.context import CryptContext
+from fastapi import HTTPException, Depends
+
+# Password Hashing Setup
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# 1. Database Model (Accounts Table)
+class Account(Base):
+    __tablename__ = "accounts"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(100), unique=True, index=True)
+    password_hash = Column(String(255))
+    role = Column(String(20)) # yahan 'user', 'worker', ya 'admin' save hoga
+
+# Is line se nayi table automatically database me ban jayegi
+Base.metadata.create_all(bind=engine)
+
+# 2. Pydantic Schemas (Data aane ka format)
+class AccountCreate(BaseModel):
+    email: str
+    password: str
+    role: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+# --- SECURITY APIs ---
+
+# Signup API (Account banane ke liye)
+@app.post("/api/signup")
+def signup(account: AccountCreate, db: Session = Depends(get_db)):
+    # Check karein ki email pehle se toh nahi hai
+    existing = db.query(Account).filter(Account.email == account.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Ye Email pehle se registered hai!")
+    
+    # Password ko encrypt (hash) karke save karna
+    hashed_pw = pwd_context.hash(account.password)
+    new_acc = Account(email=account.email, password_hash=hashed_pw, role=account.role)
+    db.add(new_acc)
+    db.commit()
+    return {"message": f"{account.role} account successfully ban gaya!"}
+
+# Strict Login API (Cross-portal login rokne ke liye)
+@app.post("/api/login/{portal_role}")
+def login(portal_role: str, req: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(Account).filter(Account.email == req.email).first()
+    
+    # Email ya Password galat hone par
+    if not user or not pwd_context.verify(req.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Email ya Password galat hai!")
+    
+    # Strict Role Check (Ye rokega user ko admin panel me aane se)
+    if user.role != portal_role:
+        raise HTTPException(status_code=403, detail=f"Access Denied! Aap ek {user.role} hain. Aap {portal_role} portal se login nahi kar sakte.")
+        
+    return {"message": "Login Success", "user_id": user.id, "role": user.role, "email": user.email}
+
+# Admin Authority API (Sirf Admin saare users dekh sakta hai)
+@app.get("/api/admin/all-users")
+def get_all_users(admin_id: int, db: Session = Depends(get_db)):
+    # Security check: Pata karo ki maangne wala sach me admin hai ya nahi
+    admin = db.query(Account).filter(Account.id == admin_id, Account.role == "admin").first()
+    if not admin:
+        raise HTTPException(status_code=403, detail="Restricted Area: Sirf Admin ko ye data dekhne ki permission hai!")
+        
+    users = db.query(Account).all()
+    # Pura data return karne se pehle security ke liye password_hash hata do
+    result = [{"id": u.id, "email": u.email, "role": u.role} for u in users]
+    return result
 # Tables auto-create karna
 models.Base.metadata.create_all(bind=engine)
 
