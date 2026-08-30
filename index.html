@@ -11,19 +11,37 @@
         button:hover { background: #0056b3; }
         .hidden { display: none; }
         #locationText { font-size: 14px; color: green; font-weight: bold; }
+        .auth-container { max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
 
-    <!-- 📱 Login Screen -->
-    <div id="loginScreen" class="card">
-        <h2>Nagar Nigam Login</h2>
-        <input type="text" id="phone" placeholder="Phone Number (Jaise: 1234567890)">
-        <input type="password" id="password" placeholder="Password (Jaise: king)">
-        <button onclick="loginUser()">Login</button>
+    <!-- 1. LOGIN & SIGNUP BOX -->
+    <div class="auth-container" id="auth-box">
+        <!-- LOGIN SECTION -->
+        <div id="login-section">
+            <h2>Nagar Nigam Login</h2>
+            <input type="email" id="login-email" placeholder="Email (Jaise: user@gmail.com)">
+            <input type="password" id="login-password" placeholder="Password">
+            <button onclick="loginUser('user')">Login</button>
+            <p style="margin-top: 15px; font-size: 14px; text-align: center;">
+                Naya account banayein? <a href="#" onclick="toggleForm()" style="color: blue;">Sign Up</a>
+            </p>
+        </div>
+
+        <!-- SIGNUP SECTION -->
+        <div id="signup-section" style="display: none;">
+            <h2>Nagar Nigam Sign Up</h2>
+            <input type="email" id="signup-email" placeholder="Email (Jaise: user@gmail.com)">
+            <input type="password" id="signup-password" placeholder="Naya Password">
+            <button onclick="signupUser('user')">Sign Up</button>
+            <p style="margin-top: 15px; font-size: 14px; text-align: center;">
+                Pehle se account hai? <a href="#" onclick="toggleForm()" style="color: blue;">Login</a>
+            </p>
+        </div>
     </div>
 
-    <!-- 📱 Complaint Screen (Login hone par dikhegi) -->
+    <!-- 2. MAIN COMPLAINT SCREEN (Login ke baad dikhegi) -->
     <div id="complaintScreen" class="card hidden">
         <h2>Nayi Complaint Darj Karein</h2>
         
@@ -43,42 +61,68 @@
 
     <!-- ⚙️ JavaScript Logic -->
     <script>
-        // Tumhara FastAPI Server URL
         const BASE_URL = "https://nagar-nigam-api-live.onrender.com/api";
         let currentUserId = null;
         let lat = null;
         let lng = null;
-
-        // 1. API - Login User
-        async function loginUser() {
-            const phone = document.getElementById('phone').value;
-            const password = document.getElementById('password').value;
-
-            try {
-                const response = await fetch(`${BASE_URL}/users/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone_number: phone, password: password })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    alert("Login Successful! Welcome " + data.name);
-                    currentUserId = data.user_id; // ID save kar li
-                    
-                    // Login screen chupao, Complaint screen dikhao
-                    document.getElementById('loginScreen').classList.add('hidden');
-                    document.getElementById('complaintScreen').classList.remove('hidden');
-                } else {
-                    alert("Error: " + data.detail);
-                }
-            } catch (error) {
-                alert("Backend server se connect nahi ho paya. Kya uvicorn chalu hai?");
+        
+        function toggleForm() {
+            const loginSec = document.getElementById("login-section");
+            const signupSec = document.getElementById("signup-section");
+            
+            if (loginSec.style.display === "none") {
+                loginSec.style.display = "block";
+                signupSec.style.display = "none";
+            } else {
+                loginSec.style.display = "none";
+                signupSec.style.display = "block";
             }
         }
 
-        // 2. Phone ka GPS Sensor access karna
+        async function signupUser(roleType) {
+            const email = document.getElementById("signup-email").value;
+            const password = document.getElementById("signup-password").value;
+
+            const response = await fetch(`${BASE_URL}/signup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: email, password: password, role: roleType })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                alert("Account ban gaya! Ab login karein.");
+                toggleForm(); 
+            } else {
+                alert("Error: " + data.detail);
+            }
+        }
+
+        async function loginUser(roleType) {
+            const email = document.getElementById("login-email").value;
+            const password = document.getElementById("login-password").value;
+
+            const response = await fetch(`${BASE_URL}/login/${roleType}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: email, password: password })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                alert("Login Success!");
+                
+                // DATA SAVE: Backend se aayi user_id ko complaint ke liye save kiya
+                currentUserId = data.user_id; 
+                
+                // SCREEN CHANGE: Login form chupao aur Complaint Form dikhao
+                document.getElementById("auth-box").style.display = "none"; 
+                document.getElementById("complaintScreen").classList.remove("hidden");
+            } else {
+                alert("Error: " + data.detail);
+            }
+        }
+
         function getLiveLocation() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
@@ -96,12 +140,10 @@
             }
         }
 
-        // 3. API - Submit Complaint (Photo Upload + Database Save)
         async function submitComplaint() {
             const category = document.getElementById('category').value;
             const fileInput = document.getElementById('imageFile');
 
-            // 1. Basic Check: Location aur Photo hai ya nahi
             if (!lat || !lng) {
                 alert("Pehle 'Get Live Location' button par click karke location save karein!");
                 return;
@@ -113,26 +155,23 @@
 
             const file = fileInput.files[0];
             const formData = new FormData();
-            formData.append("file", file); // FastAPI ko 'file' keyword chahiye
+            formData.append("file", file);
 
             try {
-                // UI Update: User ko pata chale ki process chal raha hai
                 const submitBtn = document.querySelector("button[onclick='submitComplaint()']");
                 submitBtn.innerText = "⏳ Uploading Photo...";
                 submitBtn.disabled = true;
 
-                // 2. Photo Cloudinary par upload karna
                 const uploadRes = await fetch(`${BASE_URL}/upload-image`, {
                     method: 'POST',
-                    body: formData // File bhejte waqt Content-Type khud set hota hai
+                    body: formData 
                 });
                 
-                if (!uploadRes.ok) throw new Error("Photo upload fail ho gayi. Cloudinary API check karein.");
+                if (!uploadRes.ok) throw new Error("Photo upload fail ho gayi.");
                 
                 const uploadData = await uploadRes.json();
                 const imageUrl = uploadData.url;
 
-                // 3. Complaint ka data Database me bhejna
                 submitBtn.innerText = "⏳ Saving Complaint...";
                 const complaintData = {
                     user_id: currentUserId,
@@ -152,7 +191,6 @@
 
                 if (complaintRes.ok) {
                     alert("✅ Success! " + finalData.message);
-                    // Form reset kar do taaki nayi complaint kar sake
                     fileInput.value = "";
                     submitBtn.innerText = "🚀 Submit Complaint";
                     submitBtn.disabled = false;

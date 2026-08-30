@@ -9,24 +9,113 @@
         input, button { width: 100%; padding: 12px; margin: 10px 0; box-sizing: border-box; border-radius: 5px; border: 1px solid #ccc; }
         button { background: #ffc107; color: black; border: none; cursor: pointer; font-weight: bold; }
         button:hover { background: #e0a800; }
+        
+        /* Auth Box Styling */
+        .auth-container { max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .btn-blue { background: #007BFF; color: white; }
+        .btn-blue:hover { background: #0056b3; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>👷 Worker Portal</h2>
-        <p>Kaam poora hone ke baad photo upload karein.</p>
 
-        <input type="number" id="compId" placeholder="Complaint ID (Jaise: 1)">
+    <!-- 1. LOGIN & SIGNUP BOX (Gatekeeper) -->
+    <div class="auth-container" id="auth-box">
         
-        <label>Solve kiye gaye kaam ki Photo:</label>
-        <input type="file" id="imageFile" accept="image/*" capture="environment">
+        <!-- Login Section -->
+        <div id="login-section">
+            <h2>Worker Portal Login</h2>
+            <input type="email" id="login-email" placeholder="Worker Email (Jaise: worker@gmail.com)">
+            <input type="password" id="login-password" placeholder="Password">
+            <button class="btn-blue" onclick="loginUser('worker')">Login</button>
+            <p style="margin-top: 15px; font-size: 14px; text-align: center;">
+                Naya Worker account banayein? <a href="#" onclick="toggleForm()" style="color: blue;">Sign Up</a>
+            </p>
+        </div>
 
-        <button onclick="completeTask()">✅ Kaam Complete Mark Karein</button>
+        <!-- Signup Section -->
+        <div id="signup-section" style="display: none;">
+            <h2>Worker Portal Sign Up</h2>
+            <input type="email" id="signup-email" placeholder="Worker Email">
+            <input type="password" id="signup-password" placeholder="Naya Password">
+            <button class="btn-blue" onclick="signupUser('worker')">Sign Up</button>
+            <p style="margin-top: 15px; font-size: 14px; text-align: center;">
+                Pehle se account hai? <a href="#" onclick="toggleForm()" style="color: blue;">Login</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- 2. MAIN WORKER DASHBOARD (Shuru mein chupa rahega) -->
+    <div id="main-dashboard" style="display: none;">
+        <div class="card">
+            <h2>👷 Worker Portal</h2>
+            <p>Kaam poora hone ke baad photo upload karein.</p>
+
+            <input type="number" id="compId" placeholder="Complaint ID (Jaise: 1)">
+            
+            <label>Solve kiye gaye kaam ki Photo:</label>
+            <input type="file" id="imageFile" accept="image/*" capture="environment">
+
+            <button onclick="completeTask()">✅ Kaam Complete Mark Karein</button>
+        </div>
     </div>
 
     <script>
         const BASE_URL = "https://nagar-nigam-api-live.onrender.com/api";
 
+        // --- AUTHENTICATION LOGIC ---
+        function toggleForm() {
+            const loginSec = document.getElementById("login-section");
+            const signupSec = document.getElementById("signup-section");
+            
+            if (loginSec.style.display === "none") {
+                loginSec.style.display = "block";
+                signupSec.style.display = "none";
+            } else {
+                loginSec.style.display = "none";
+                signupSec.style.display = "block";
+            }
+        }
+
+        async function signupUser(roleType) {
+            const email = document.getElementById("signup-email").value;
+            const password = document.getElementById("signup-password").value;
+
+            const response = await fetch(`${BASE_URL}/signup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: email, password: password, role: roleType })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                alert("Account ban gaya! Ab login karein.");
+                toggleForm(); 
+            } else {
+                alert("Error: " + data.detail);
+            }
+        }
+
+        async function loginUser(roleType) {
+            const email = document.getElementById("login-email").value;
+            const password = document.getElementById("login-password").value;
+
+            const response = await fetch(`${BASE_URL}/login/${roleType}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: email, password: password })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                // Login successful hone par gate hatao aur worker form dikhao
+                document.getElementById("auth-box").style.display = "none"; 
+                document.getElementById("main-dashboard").style.display = "block";
+            } else {
+                alert("Error: " + data.detail);
+            }
+        }
+
+        // --- WORKER TASK LOGIC ---
         async function completeTask() {
             const compId = document.getElementById('compId').value;
             const fileInput = document.getElementById('imageFile');
@@ -44,13 +133,12 @@
             const formData = new FormData();
             formData.append("file", file);
 
-            const submitBtn = document.querySelector("button");
+            const submitBtn = document.querySelector("#main-dashboard button");
             
             try {
                 submitBtn.innerText = "⏳ Uploading Photo...";
                 submitBtn.disabled = true;
 
-                // 1. Photo ko Cloudinary par upload karna
                 const uploadRes = await fetch(`${BASE_URL}/upload-image`, {
                     method: 'POST',
                     body: formData
@@ -60,7 +148,6 @@
                 const uploadData = await uploadRes.json();
                 const imageUrl = uploadData.url;
 
-                // 2. FastAPI backend par Task Complete mark karna
                 submitBtn.innerText = "⏳ Updating Task...";
                 const completeRes = await fetch(`${BASE_URL}/employees/complaints/${compId}/complete`, {
                     method: 'PUT',

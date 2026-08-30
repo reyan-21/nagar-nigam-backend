@@ -12,35 +12,123 @@
         img { max-width: 80px; border-radius: 5px; cursor: pointer; }
         select, input, button { padding: 10px; margin-top: 10px; width: 100%; box-sizing: border-box; border-radius: 5px; border: 1px solid #ccc; }
         button { background: #28a745; color: white; border: none; cursor: pointer; font-weight: bold; }
+        
+        /* Auth Box Styling */
+        .auth-container { max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .btn-blue { background: #007BFF; }
     </style>
 </head>
 <body>
-    <h2>🛠️ Admin Dashboard</h2>
 
-    <!-- Pending Complaints Table -->
-    <div class="card">
-        <h3>Pending Complaints</h3>
-        <button onclick="loadDashboard()" style="background: #007BFF; width: auto; margin-bottom: 10px;">🔄 Refresh Data</button>
-        <table id="complaintsTable">
-            <tr><th>ID</th><th>Category</th><th>Photo</th><th>Status</th></tr>
-        </table>
+    <!-- 1. LOGIN & SIGNUP BOX (Gatekeeper) -->
+    <div class="auth-container" id="auth-box">
+        
+        <!-- Login Section -->
+        <div id="login-section">
+            <h2>Admin Portal Login</h2>
+            <input type="email" id="login-email" placeholder="Admin Email (Jaise: admin@nagarnigam.com)">
+            <input type="password" id="login-password" placeholder="Password">
+            <button class="btn-blue" onclick="loginUser('admin')">Login</button> 
+            <p style="margin-top: 15px; font-size: 14px; text-align: center;">
+                Naya Admin account banayein? <a href="#" onclick="toggleForm()" style="color: blue;">Sign Up</a>
+            </p>
+        </div>
+
+        <!-- Signup Section -->
+        <div id="signup-section" style="display: none;">
+            <h2>Admin Portal Sign Up</h2>
+            <input type="email" id="signup-email" placeholder="Admin Email">
+            <input type="password" id="signup-password" placeholder="Naya Password">
+            <button class="btn-blue" onclick="signupUser('admin')">Sign Up</button>
+            <p style="margin-top: 15px; font-size: 14px; text-align: center;">
+                Pehle se account hai? <a href="#" onclick="toggleForm()" style="color: blue;">Login</a>
+            </p>
+        </div>
     </div>
 
-    <!-- Assign Task Section -->
-    <div class="card">
-        <h3>Kaam Assign Karein</h3>
-        <input type="number" id="compId" placeholder="Complaint ID (Jaise: 1)">
-        <select id="empSelect">
-            <option value="">Employee Select Karein</option>
-        </select>
-        <button onclick="assignTask()">✅ Assign Task</button>
+    <!-- 2. MAIN DASHBOARD (Shuru mein chupa rahega) -->
+    <div id="main-dashboard" style="display: none;">
+        <h2>🛠️ Admin Dashboard</h2>
+
+        <div class="card">
+            <h3>Pending Complaints</h3>
+            <button onclick="loadDashboard()" style="background: #007BFF; width: auto; margin-bottom: 10px;">🔄 Refresh Data</button>
+            <table id="complaintsTable">
+                <tr><th>ID</th><th>Category</th><th>Photo</th><th>Status</th></tr>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>Kaam Assign Karein</h3>
+            <input type="number" id="compId" placeholder="Complaint ID (Jaise: 1)">
+            <select id="empSelect">
+                <option value="">Employee Select Karein</option>
+            </select>
+            <button onclick="assignTask()">✅ Assign Task</button>
+        </div>
     </div>
 
     <script>
         const BASE_URL = "https://nagar-nigam-api-live.onrender.com/api";
 
+        // --- AUTHENTICATION LOGIC ---
+        function toggleForm() {
+            const loginSec = document.getElementById("login-section");
+            const signupSec = document.getElementById("signup-section");
+            
+            if (loginSec.style.display === "none") {
+                loginSec.style.display = "block";
+                signupSec.style.display = "none";
+            } else {
+                loginSec.style.display = "none";
+                signupSec.style.display = "block";
+            }
+        }
+
+        async function signupUser(roleType) {
+            const email = document.getElementById("signup-email").value;
+            const password = document.getElementById("signup-password").value;
+
+            const response = await fetch(`${BASE_URL}/signup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: email, password: password, role: roleType })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                alert("Account ban gaya! Ab login karein.");
+                toggleForm();
+            } else {
+                alert("Error: " + data.detail);
+            }
+        }
+
+        async function loginUser(roleType) {
+            const email = document.getElementById("login-email").value;
+            const password = document.getElementById("login-password").value;
+
+            const response = await fetch(`${BASE_URL}/login/${roleType}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: email, password: password })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                // Login successful hone par gate hatao aur dashboard dikhao
+                document.getElementById("auth-box").style.display = "none";
+                document.getElementById("main-dashboard").style.display = "block";
+                
+                // Dashboard ka data ab load karo
+                loadDashboard();
+            } else {
+                alert("Error: " + data.detail);
+            }
+        }
+
+        // --- DASHBOARD LOGIC ---
         async function loadDashboard() {
-            // 1. Pending Complaints Fetch
             const compRes = await fetch(`${BASE_URL}/admin/complaints/pending`);
             const complaints = await compRes.json();
             
@@ -55,7 +143,6 @@
             });
             document.getElementById('complaintsTable').innerHTML = compHTML;
 
-            // 2. Available Employees Fetch
             const empRes = await fetch(`${BASE_URL}/admin/employees/available`);
             const employees = await empRes.json();
             
@@ -65,38 +152,8 @@
             });
             document.getElementById('empSelect').innerHTML = empHTML;
         }
-
-        async function assignTask() {
-            const compId = document.getElementById('compId').value;
-            const empId = document.getElementById('empSelect').value;
-
-            if (!compId || !empId) {
-                alert("Kripya Complaint ID aur Employee dono select karein!");
-                return;
-            }
-
-            try {
-                const response = await fetch(`${BASE_URL}/admin/complaints/${compId}/assign`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ emp_id: parseInt(empId) })
-                });
-
-                const data = await response.json();
-                if (response.ok) {
-                    alert("✅ Success: " + data.message);
-                    document.getElementById('compId').value = ""; 
-                    loadDashboard(); // Table khud update ho jayegi
-                } else {
-                    alert("Error: " + data.detail);
-                }
-            } catch (error) {
-                alert("System error: " + error.message);
-            }
-        }
-
-        // Page load hote hi API call hogi
-        window.onload = loadDashboard;
+        
+        // Note: Ab window.onload = loadDashboard; hata diya hai kyunki data sirf login ke baad load hoga.
     </script>
 </body>
 </html>
