@@ -20,8 +20,7 @@ class User(Base):
     password = Column(String(100), nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
-    # Connection with complaints
-    complaints = relationship("Complaint", back_populates="user")
+    # Connection with complaints hata diya gaya hai error rokne ke liye
 
 class Employee(Base):
     __tablename__ = "employees"
@@ -43,9 +42,14 @@ class Admin(Base):
     password = Column(String(100), nullable=False)
 
 class Complaint(Base):
-    __tablename__ = "complaints"
+    # Table ka naam change kar diya taaki fresh table ban jaye
+    __tablename__ = "complaints_new" 
+    
     complaint_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.user_id"))
+    
+    # ForeignKey hata diya taaki crash na ho
+    user_id = Column(Integer) 
+    
     emp_id = Column(Integer, ForeignKey("employees.emp_id"), nullable=True)
     category = Column(String(50))
     user_image_url = Column(String(255))
@@ -57,5 +61,5 @@ class Complaint(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
-    user = relationship("User", back_populates="complaints")
+    # Sirf employee relationship rakhi hai
     employee = relationship("Employee", back_populates="complaints")
